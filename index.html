@@ -117,8 +117,6 @@
       <h2>찍은 사진</h2>
       <button id="close">닫기</button>
     </div>
-    <div class="hint">사진은 이 페이지에만 임시로 보관됩니다. 새로고침하거나 닫기 전에 저장해 주세요.
-      사진을 길게 눌러 '사진에 추가'로 저장하거나 '공유/저장' 버튼을 사용할 수 있습니다.</div>
     <div id="gallery"></div>
   </div>
 </section>
@@ -238,8 +236,7 @@
       await v.play();
       wantOn = true;
       setControls(true);
-      var res = v.videoWidth ? ' (' + v.videoWidth + '×' + v.videoHeight + ')' : '';
-      setMsg('준비 완료' + res + '\n동그란 버튼을 누르면 무음으로 촬영됩니다.', 3500);
+      setMsg('');
     } catch (e) {
       stopStream();
       wantOn = false;
@@ -249,6 +246,15 @@
       busy = false;
       startBtn.disabled = flipBtn.disabled = shotBtn.disabled = false;
     }
+  }
+
+  function saveFile(url, name) {
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   function capture() {
@@ -286,12 +292,7 @@
           if (e && e.name === 'AbortError') return; // 사용자가 취소
         }
         // 공유를 지원하지 않으면 파일로 내려받기
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        saveFile(url, name);
       };
 
       var del = document.createElement('button');
@@ -310,6 +311,7 @@
       item.appendChild(btns);
       gallery.insertBefore(item, gallery.firstChild);
       refreshThumb();
+      saveFile(url, name); // 찍는 즉시 자동 저장
     }, 'image/jpeg', 0.95);
   }
 
@@ -332,12 +334,7 @@
     if (!track || track.readyState === 'ended') startCamera();
   });
 
-  // 저장하지 않은 사진이 있으면 닫기/새로고침 전에 확인
-  window.addEventListener('beforeunload', function (e) {
-    if (photoCount > 0) { e.preventDefault(); e.returnValue = ''; }
-  });
 
-  setMsg("'카메라 켜기'를 누르고 카메라 접근을 허용해 주세요.");
 })();
 </script>
 </body>
