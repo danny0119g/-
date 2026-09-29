@@ -26,8 +26,7 @@
   .cam { position: fixed; inset: 0; background: #000; overflow: hidden; }
   #v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
   #v.mirror { transform: scaleX(-1); }
-  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .15s; }
-  @media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
+  #flash { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 
   #msg {
     position: absolute; z-index: 2; left: 50%; transform: translateX(-50%);
@@ -258,13 +257,22 @@
     a.remove();
   }
 
+  // 셔터 효과: 화면이 순간 어두워졌다가 부드럽게 돌아온다
+  function shutterEffect() {
+    if (!flash.animate) return;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    flash.animate(
+      [{ opacity: 0.9 }, { opacity: 0.9, offset: 0.2 }, { opacity: 0 }],
+      { duration: reduce ? 120 : 380, easing: 'ease-out' }
+    );
+  }
+
   function capture() {
     if (busy || !stream || !v.videoWidth) return;
     c.width = v.videoWidth;
     c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-    flash.style.opacity = '0.6';
-    setTimeout(function () { flash.style.opacity = '0'; }, 120);
+    shutterEffect();
     c.toBlob(function (blob) {
       if (!blob) { setMsg('사진을 만들지 못했습니다. 다시 시도해 주세요.', 3000); return; }
       serial++;
