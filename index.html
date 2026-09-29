@@ -8,73 +8,122 @@
   :root {
     --bg: #ffffff; --fg: #111111; --muted: #666666; --card: #f2f2f2; --accent: #2563eb;
     box-sizing: border-box;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) { --bg: #111111; --fg: #f2f2f2; --muted: #999999; --card: #222222; --accent: #60a5fa; }
   }
   :root[data-theme="dark"] { --bg: #111111; --fg: #f2f2f2; --muted: #999999; --card: #222222; --accent: #60a5fa; }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-  body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
-  .wrap {
-    max-width: 900px; margin: 0 auto; padding: 12px;
-    padding-left: max(12px, env(safe-area-inset-left, 0px));
-    padding-right: max(12px, env(safe-area-inset-right, 0px));
-  }
-  .view { position: relative; background: #000; border-radius: 14px; overflow: hidden; }
-  video { width: 100%; max-height: 70vh; max-height: 70dvh; display: block; background: #000; object-fit: contain; }
-  video.mirror { transform: scaleX(-1); }
-  .row { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
-  .row.on { justify-content: space-between; }
-  @media (orientation: landscape) and (min-width: 700px) {
-    .stage { display: flex; gap: 12px; align-items: stretch; }
-    .view { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; }
-    video { max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); }
-    .row { flex-direction: column; flex-wrap: nowrap; width: 120px; margin: 0; }
-    .row.on { justify-content: center; gap: 28px; }
-    .item button, #flip { font-size: 13px; }
-    #flip { padding: 12px 8px; }
-  }
-  button { font: inherit; border: 0; border-radius: 12px; padding: 12px 18px; background: var(--card); color: var(--fg); }
+  body { margin: 0; background: #000; color: var(--fg); overflow: hidden;
+    font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  button { font: inherit; border: 0; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   button:disabled { opacity: .5; }
-  button.shot { width: 76px; height: 76px; border-radius: 50%; background: #fff; border: 5px solid var(--accent); padding: 0; }
-  button.shot:active { transform: scale(.92); }
-  #start { background: var(--accent); color: #fff; font-weight: 600; }
-  #msg { text-align: center; color: var(--muted); font-size: 14px; margin: 8px 0; white-space: pre-line; }
+
+  /* ---- 전체 화면 뷰파인더 ---- */
+  .cam { position: fixed; inset: 0; background: #000; overflow: hidden; }
+  #v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+  #v.mirror { transform: scaleX(-1); }
   #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .15s; }
   @media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
+
+  #msg {
+    position: absolute; z-index: 2; left: 50%; transform: translateX(-50%);
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    max-width: min(90%, 520px); padding: 10px 16px; border-radius: 14px;
+    background: rgba(0,0,0,.6); color: #fff; font-size: 14px; line-height: 1.45;
+    text-align: center; white-space: pre-line; display: none;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  #start {
+    position: absolute; z-index: 1; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    padding: 14px 26px; border-radius: 14px; background: var(--accent); color: #fff; font-weight: 600; font-size: 16px;
+  }
+
+  /* 세로 화면: 아래 가운데 촬영, 왼쪽 썸네일, 오른쪽 전환 */
+  .controls {
+    position: absolute; z-index: 1; left: 0; right: 0; bottom: 0;
+    display: none; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 22px max(24px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+    background: linear-gradient(to top, rgba(0,0,0,.45), rgba(0,0,0,0));
+  }
+  .controls.on { display: grid; }
+  .ctl {
+    width: 52px; height: 52px; border-radius: 50%; padding: 0; color: #fff;
+    background: rgba(255,255,255,.22); display: grid; place-items: center;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+  .ctl svg { width: 24px; height: 24px; }
+  #flip { justify-self: end; }
+  .thumb {
+    justify-self: start; width: 52px; height: 52px; border-radius: 12px; padding: 0;
+    border: 2px solid rgba(255,255,255,.85); background: #333 center / cover no-repeat; display: none;
+  }
+  .shot { width: 78px; height: 78px; border-radius: 50%; padding: 0; background: #fff; border: 5px solid rgba(255,255,255,.55); background-clip: padding-box; }
+  .shot:active { transform: scale(.92); }
+
+  /* 가로 화면(아이패드): 오른쪽 세로줄에 전환·촬영·썸네일 */
+  @media (orientation: landscape) and (min-width: 700px) {
+    .controls {
+      left: auto; top: 0; grid-template-columns: none; grid-template-rows: 1fr auto 1fr; justify-items: center;
+      padding: max(20px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) 24px;
+      background: linear-gradient(to left, rgba(0,0,0,.45), rgba(0,0,0,0));
+    }
+    #flip { order: 1; justify-self: center; align-self: center; }
+    .shot { order: 2; }
+    .thumb { order: 3; justify-self: center; align-self: center; }
+    #msg { top: max(12px, env(safe-area-inset-top, 0px)); }
+  }
+
+  /* ---- 찍은 사진 보기 ---- */
+  #panel { position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg); overflow: auto;
+    padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(12px, env(safe-area-inset-left, 0px)); }
+  #panel[hidden] { display: none; }
+  .panel-in { max-width: 900px; margin: 0 auto; padding: 12px 0 24px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; }
+  #close { padding: 10px 16px; border-radius: 12px; background: var(--card); color: var(--fg); }
+  h2 { font-size: 17px; margin: 0; }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
   #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 8px; }
   .item { background: var(--card); border-radius: 12px; padding: 8px; }
   .item img { width: 100%; border-radius: 8px; display: block; -webkit-touch-callout: default; }
   .item .btns { display: flex; gap: 6px; margin-top: 6px; }
-  .item button { flex: 1; padding: 8px; font-size: 13px; background: var(--bg); }
-  h2 { font-size: 15px; margin: 18px 0 4px; }
-  .hint { font-size: 13px; color: var(--muted); }
+  .item button { flex: 1; padding: 8px; font-size: 13px; border-radius: 10px; background: var(--bg); color: var(--fg); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="stage">
-    <div class="view">
-      <video id="v" autoplay playsinline muted></video>
-      <div id="flash"></div>
-    </div>
-    <div class="row" id="row">
-      <button id="start">카메라 켜기</button>
-      <button id="flip" aria-label="전면·후면 카메라 전환" style="display:none">전/후면 전환</button>
-      <button id="shot" class="shot" aria-label="촬영" style="display:none"></button>
-    </div>
+<main class="cam">
+  <video id="v" autoplay playsinline muted></video>
+  <div id="flash"></div>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <button id="start">카메라 켜기</button>
+  <div class="controls" id="row">
+    <button id="thumb" class="thumb" aria-label="찍은 사진 보기"></button>
+    <button id="shot" class="shot" aria-label="촬영"></button>
+    <button id="flip" class="ctl" aria-label="전면·후면 카메라 전환">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+    </button>
   </div>
-  <div id="msg" role="status" aria-live="polite">'카메라 켜기'를 누르고 카메라 접근을 허용해 주세요.</div>
-  <h2>찍은 사진</h2>
-  <div class="hint">사진은 이 페이지에만 임시로 보관됩니다. 새로고침하거나 닫기 전에 저장해 주세요.
-    사진을 길게 눌러 '사진에 추가'로 저장하거나 '공유/저장' 버튼을 사용할 수 있습니다.</div>
-  <div id="gallery"></div>
-</div>
+</main>
+
+<section id="panel" hidden aria-label="찍은 사진">
+  <div class="panel-in">
+    <div class="panel-head">
+      <h2>찍은 사진</h2>
+      <button id="close">닫기</button>
+    </div>
+    <div class="hint">사진은 이 페이지에만 임시로 보관됩니다. 새로고침하거나 닫기 전에 저장해 주세요.
+      사진을 길게 눌러 '사진에 추가'로 저장하거나 '공유/저장' 버튼을 사용할 수 있습니다.</div>
+    <div id="gallery"></div>
+  </div>
+</section>
 <canvas id="c" style="display:none"></canvas>
+
 <script>
 (function () {
   var v = document.getElementById('v');
@@ -83,16 +132,27 @@
   var startBtn = document.getElementById('start');
   var shotBtn = document.getElementById('shot');
   var flipBtn = document.getElementById('flip');
+  var thumbBtn = document.getElementById('thumb');
+  var row = document.getElementById('row');
   var gallery = document.getElementById('gallery');
   var flash = document.getElementById('flash');
+  var panel = document.getElementById('panel');
+  var closeBtn = document.getElementById('close');
   var stream = null;
   var facing = 'environment';
   var busy = false;      // 카메라를 여는 중이면 true (중복 호출 방지)
   var wantOn = false;    // 사용자가 카메라를 켠 상태인지
   var photoCount = 0;    // 갤러리에 남아 있는 사진 수
   var serial = 0;
+  var msgTimer = null;
 
-  function setMsg(t) { msg.textContent = t; }
+  // 안내 문구: autoHideMs를 주면 그 시간 뒤에 사라진다 (오류는 계속 표시)
+  function setMsg(t, autoHideMs) {
+    clearTimeout(msgTimer);
+    msg.textContent = t || '';
+    msg.style.display = t ? 'block' : 'none';
+    if (t && autoHideMs) msgTimer = setTimeout(function () { msg.style.display = 'none'; }, autoHideMs);
+  }
 
   function stopStream() {
     if (stream) {
@@ -103,9 +163,27 @@
 
   function setControls(on) {
     startBtn.style.display = on ? 'none' : '';
-    shotBtn.style.display = on ? '' : 'none';
-    flipBtn.style.display = on ? '' : 'none';
-    document.getElementById('row').classList.toggle('on', on);
+    row.classList.toggle('on', on);
+  }
+
+  function refreshThumb() {
+    var first = gallery.querySelector('img');
+    if (first) {
+      thumbBtn.style.display = 'block';
+      thumbBtn.style.backgroundImage = 'url("' + first.src + '")';
+    } else {
+      thumbBtn.style.display = 'none';
+      thumbBtn.style.backgroundImage = '';
+    }
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    closeBtn.focus();
+  }
+  function closePanel() {
+    panel.hidden = true;
+    if (thumbBtn.style.display !== 'none') thumbBtn.focus();
   }
 
   function explain(e) {
@@ -161,7 +239,7 @@
       wantOn = true;
       setControls(true);
       var res = v.videoWidth ? ' (' + v.videoWidth + '×' + v.videoHeight + ')' : '';
-      setMsg('준비 완료' + res + '. 동그란 버튼을 누르면 무음으로 촬영됩니다.');
+      setMsg('준비 완료' + res + '\n동그란 버튼을 누르면 무음으로 촬영됩니다.', 3500);
     } catch (e) {
       stopStream();
       wantOn = false;
@@ -181,7 +259,7 @@
     flash.style.opacity = '0.6';
     setTimeout(function () { flash.style.opacity = '0'; }, 120);
     c.toBlob(function (blob) {
-      if (!blob) { setMsg('사진을 만들지 못했습니다. 다시 시도해 주세요.'); return; }
+      if (!blob) { setMsg('사진을 만들지 못했습니다. 다시 시도해 주세요.', 3000); return; }
       serial++;
       photoCount++;
       var url = URL.createObjectURL(blob);
@@ -214,7 +292,6 @@
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setMsg('내려받기를 시작했습니다. 저장되지 않으면 사진을 길게 눌러 저장해 주세요.');
       };
 
       var del = document.createElement('button');
@@ -223,6 +300,8 @@
         URL.revokeObjectURL(url);
         item.remove();
         photoCount = Math.max(0, photoCount - 1);
+        refreshThumb();
+        if (photoCount === 0) closePanel();
       };
 
       btns.appendChild(share);
@@ -230,6 +309,7 @@
       item.appendChild(img);
       item.appendChild(btns);
       gallery.insertBefore(item, gallery.firstChild);
+      refreshThumb();
     }, 'image/jpeg', 0.95);
   }
 
@@ -239,6 +319,11 @@
     facing = facing === 'environment' ? 'user' : 'environment';
     startCamera();
   };
+  thumbBtn.onclick = openPanel;
+  closeBtn.onclick = closePanel;
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !panel.hidden) closePanel();
+  });
 
   // 앱을 다른 화면으로 벗어났다가 돌아오면 끊긴 카메라를 다시 연결
   document.addEventListener('visibilitychange', function () {
@@ -251,6 +336,8 @@
   window.addEventListener('beforeunload', function (e) {
     if (photoCount > 0) { e.preventDefault(); e.returnValue = ''; }
   });
+
+  setMsg("'카메라 켜기'를 누르고 카메라 접근을 허용해 주세요.");
 })();
 </script>
 </body>
