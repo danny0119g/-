@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>둘이서</title>
+<style>
+  :root {
+    --bg: #eef1f4; --panel: #ffffff; --fg: #12181e; --muted: #6b7783; --line: #dbe1e7;
+    --mine: #0f766e; --mine-fg: #ffffff; --theirs: #ffffff; --theirs-fg: #12181e;
+    --accent: #0f766e; --danger: #c2410c; --shadow: rgba(18,24,30,.08);
+    box-sizing: border-box;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1216; --panel: #161c22; --fg: #eaeff3; --muted: #8b98a5; --line: #26303a;
+      --mine: #14a596; --mine-fg: #04201d; --theirs: #1f2830; --theirs-fg: #eaeff3;
+      --accent: #2dd4bf; --danger: #fb923c; --shadow: rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1216; --panel: #161c22; --fg: #eaeff3; --muted: #8b98a5; --line: #26303a;
+    --mine: #14a596; --mine-fg: #04201d; --theirs: #1f2830; --theirs-fg: #eaeff3;
+    --accent: #2dd4bf; --danger: #fb923c; --shadow: rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); overflow: hidden;
+    font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { border: 0; background: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- 시작 화면 ---------- */
+  #welcome {
+    position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px))
+             calc(24px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+    background: var(--bg); z-index: 5;
+  }
+  .card { width: min(100%, 380px); background: var(--panel); border-radius: 22px; padding: 28px 24px; box-shadow: 0 8px 30px var(--shadow); }
+  .card h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.02em; }
+  .card p { margin: 0 0 20px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .field { display: block; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+  .field input {
+    display: block; width: 100%; margin-top: 6px; padding: 13px 14px; font-size: 17px; color: var(--fg);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .primary { width: 100%; padding: 14px; border-radius: 14px; background: var(--accent); color: #fff; font-weight: 700; font-size: 17px; }
+  :root[data-theme="dark"] .primary { color: #04201d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .primary { color: #04201d; } }
+  .primary:disabled { opacity: .45; }
+  #welcomeErr { color: var(--danger); font-size: 13px; min-height: 18px; margin: 10px 0 0; }
+
+  /* ---------- 채팅 화면 ---------- */
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 10px; background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 10px max(14px, env(safe-area-inset-left, 0px));
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: #22c55e; }
+  .dot.wait { background: #f59e0b; }
+  header .title { flex: 1; min-width: 0; }
+  header .title b { display: block; font-size: 17px; }
+  header .title span { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); }
+  .icon svg { width: 20px; height: 20px; }
+
+  #list {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding: 12px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+  }
+  .day { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 8px; }
+  .row { display: flex; flex-direction: column; margin-top: 2px; }
+  .row.mine { align-items: flex-end; }
+  .row.theirs { align-items: flex-start; }
+  .row.first { margin-top: 10px; }
+  .who { font-size: 12px; color: var(--muted); margin: 0 6px 3px; }
+  .line { display: flex; align-items: flex-end; gap: 6px; max-width: 100%; }
+  .row.mine .line { flex-direction: row-reverse; }
+  .bubble {
+    max-width: min(78vw, 520px); padding: 9px 13px; border-radius: 18px; line-height: 1.42; font-size: 16px;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; box-shadow: 0 1px 2px var(--shadow);
+  }
+  .mine .bubble { background: var(--mine); color: var(--mine-fg); border-bottom-right-radius: 6px; }
+  .theirs .bubble { background: var(--theirs); color: var(--theirs-fg); border-bottom-left-radius: 6px; }
+  .row:not(.last) .bubble { border-bottom-right-radius: 18px; border-bottom-left-radius: 18px; }
+  .meta { font-size: 11px; color: var(--muted); white-space: nowrap; padding-bottom: 2px; }
+  .meta.fail { color: var(--danger); font-weight: 700; }
+  .empty { text-align: center; color: var(--muted); font-size: 14px; margin-top: 30vh; line-height: 1.6; padding: 0 24px; }
+
+  #banner { background: var(--danger); color: #fff; font-size: 13px; text-align: center; padding: 6px 12px; }
+
+  form#composer {
+    display: flex; align-items: flex-end; gap: 8px; background: var(--panel); border-top: 1px solid var(--line);
+    padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  }
+  #input {
+    flex: 1; min-width: 0; max-height: 140px; resize: none; padding: 10px 14px; font-size: 16px; line-height: 1.4;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 20px;
+  }
+  #send { width: 42px; height: 42px; flex: none; border-radius: 50%; background: var(--accent); display: grid; place-items: center; }
+  #send svg { width: 20px; height: 20px; color: #fff; }
+  :root[data-theme="dark"] #send svg { color: #04201d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #send svg { color: #04201d; } }
+  #send:disabled { opacity: .35; }
+
+  /* ---------- 설정 시트 ---------- */
+  #sheetWrap { position: fixed; inset: 0; z-index: 10; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; justify-content: center; }
+  #sheet {
+    width: min(100%, 520px); background: var(--panel); border-radius: 22px 22px 0 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  #sheet h2 { font-size: 17px; margin: 0 0 12px; }
+  .btnrow { display: grid; gap: 8px; margin: 12px 0; }
+  .btn { padding: 13px; border-radius: 12px; background: var(--bg); font-size: 16px; text-align: center; }
+  .btn.warn { color: var(--danger); }
+  .note { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 6px 0 0; }
+  #linkBox { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<section id="welcome" hidden>
+  <div class="card">
+    <h1 id="wTitle">둘이서</h1>
+    <p id="wDesc">두 사람만 쓰는 비밀 대화방이에요. 이름을 정하고 시작하세요.</p>
+    <label class="field">내 이름
+      <input id="wName" maxlength="12" autocomplete="off" autocapitalize="off" placeholder="예: 다니">
+    </label>
+    <button id="wGo" class="primary" disabled>대화방 만들기</button>
+    <p id="welcomeErr" role="alert"></p>
+  </div>
+</section>
+
+<main id="app" hidden>
+  <header>
+    <span id="dot" class="dot wait" title="연결 상태"></span>
+    <div class="title"><b id="hTitle">둘이서</b><span id="hSub">연결 중…</span></div>
+    <button id="menuBtn" class="icon" aria-label="메뉴">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+  </header>
+  <div id="banner" hidden></div>
+  <div id="list" aria-live="polite"></div>
+  <form id="composer" autocomplete="off">
+    <textarea id="input" rows="1" placeholder="메시지 입력" aria-label="메시지"></textarea>
+    <button id="send" type="submit" aria-label="보내기" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+    </button>
+  </form>
+</main>
+
+<div id="sheetWrap" hidden>
+  <div id="sheet" role="dialog" aria-modal="true" aria-label="설정">
+    <h2>대화방</h2>
+    <label class="field">내 이름
+      <input id="sName" maxlength="12" autocomplete="off">
+    </label>
+    <div class="btnrow">
+      <button id="shareBtn" class="btn">초대 링크 보내기</button>
+      <input id="linkBox" readonly hidden aria-label="초대 링크">
+      <button id="clearBtn" class="btn warn">이 기기의 대화 내용 지우기</button>
+      <button id="leaveBtn" class="btn warn">대화방 나가기</button>
+      <button id="closeBtn" class="btn">닫기</button>
+    </div>
+    <p class="note">메시지는 초대 링크에 든 키로 암호화돼 두 사람의 기기에서만 읽을 수 있어요. 중계 서버에는 암호문이 12시간 동안만 남고, 대화 기록은 각자 기기에만 저장돼요. 초대 링크를 가진 사람은 누구나 들어올 수 있으니 상대에게만 보내세요.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // 기본 설정
+  // =====================================================================
+  var RELAY = 'https://ntfy.sh/';           // 암호문만 전달하는 무료 중계 서버
+  var MAX_TEXT_BYTES = 2500;                // 서버 메시지 한도(4KB)를 넘지 않도록
+  var MAX_KEEP = 500;                       // 기기에 보관할 최대 메시지 수
+
+  // =====================================================================
+  // 저장소 (실패해도 동작하도록 try/catch)
+  // =====================================================================
+  function sget(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function sset(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function sdel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  // =====================================================================
+  // 암호화 도우미
+  // =====================================================================
+  var enc = new TextEncoder();
+  var dec = new TextDecoder();
+
+  function toB64u(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function fromB64u(str) {
+    var b = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    var s = atob(b), out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  function hex(buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  function randomSecret() { return toB64u(crypto.getRandomValues(new Uint8Array(16))); }
+  function uuid() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return toB64u(crypto.getRandomValues(new Uint8Array(12)));
+  }
+
+  // 초대 링크의 비밀값 하나에서 "주소(topic)"와 "암호 키"를 따로 만든다.
+  // 비밀값은 링크의 # 뒤에만 있어서 서버로 전송되지 않는다.
+  async function derive(secret) {
+    var t = await crypto.subtle.digest('SHA-256', enc.encode('topic:' + secret));
+    var k = await crypto.subtle.digest('SHA-256', enc.encode('key:' + secret));
+    return {
+      topic: 'c' + hex(t).slice(0, 32),
+      key: await crypto.subtle.importKey('raw', k, 'AES-GCM', false, ['encrypt', 'decrypt'])
+    };
+  }
+  async function encrypt(key, obj) {
+    var iv = crypto.getRandomValues(new Uint8Array(12));
+    var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, enc.encode(JSON.stringify(obj))));
+    var all = new Uint8Array(iv.length + ct.length);
+    all.set(iv, 0); all.set(ct, iv.length);
+    return toB64u(all);
+  }
+  async function decrypt(key, str) {
+    var all = fromB64u(str);
+    var pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, key, all.slice(12));
+    return JSON.parse(dec.decode(pt));
+  }
+
+  // =====================================================================
+  // 상태
+  // =====================================================================
+  var $ = function (id) { return document.getElementById(id); };
+  var uid = sget('chat.uid');
+  if (!uid) { uid = uuid(); sset('chat.uid', uid); }
+
+  var room = null;      // { secret, topic, key }
+  var myName = sget('chat.name') || '';
+  var msgs = [];        // { id, u, n, t, ts, state }
+  var seen = {};        // id -> true
+  var lastNtfy = '';    // 마지막으로 받은 서버 메시지 id
+  var es = null, retryTimer = null, retryMs = 2000;
+  var unread = 0;
+
+  // =====================================================================
+  // 화면 전환
+  // =====================================================================
+  function show(el, on) { el.hidden = !on; }
+
+  function showWelcome(joining) {
+    show($('welcome'), true); show($('app'), false);
+    $('wTitle').textContent = joining ? '초대받았어요' : '둘이서';
+    $('wDesc').textContent = joining
+      ? '이름을 정하면 바로 대화방에 들어가요.'
+      : '두 사람만 쓰는 비밀 대화방이에요. 이름을 정하고 시작하세요.';
+    $('wGo').textContent = joining ? '들어가기' : '대화방 만들기';
+    $('wName').value = myName;
+    $('wGo').disabled = !$('wName').value.trim();
+    setTimeout(function () { $('wName').focus(); }, 50);
+  }
+
+  function showApp() {
+    show($('welcome'), false); show($('app'), true);
+    render(true);
+    $('input').focus();
+  }
+
+  // =====================================================================
+  // 대화 저장/복원
+  // =====================================================================
+  function histKey() { return 'chat.msgs.' + room.topic; }
+  function saveHist() {
+    var keep = msgs.filter(function (m) { return m.state !== 'sending'; }).slice(-MAX_KEEP);
+    sset(histKey(), JSON.stringify(keep));
+    sset('chat.last.' + room.topic, lastNtfy);
+  }
+  function loadHist() {
+    msgs = []; seen = {};
+    var raw = sget(histKey());
+    if (raw) {
+      try {
+        JSON.parse(raw).forEach(function (m) { if (m && m.id && !seen[m.id]) { msgs.push(m); seen[m.id] = true; } });
+      } catch (e) {}
+    }
+    lastNtfy = sget('chat.last.' + room.topic) || '';
+  }
+
+  function addMsg(m) {
+    if (seen[m.id]) return false;
+    seen[m.id] = true;
+    msgs.push(m);
+    msgs.sort(function (a, b) { return a.ts - b.ts; });
+    return true;
+  }
+
+  // =====================================================================
+  // 화면 그리기
+  // =====================================================================
+  var list = $('list');
+  function fmtTime(ts) { return new Date(ts).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }); }
+  function fmtDay(ts) { return new Date(ts).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }); }
+  function dayKey(ts) { var d = new Date(ts); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+
+  function render(forceBottom) {
+    var nearBottom = forceBottom || (list.scrollHeight - list.scrollTop - list.clientHeight < 120);
+    var frag = document.createDocumentFragment();
+
+    if (!msgs.length) {
+      var e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = '아직 대화가 없어요.\n먼저 인사를 건네 보세요.';
+      e.style.whiteSpace = 'pre-line';
+      frag.appendChild(e);
+    }
+
+    var prevDay = '';
+    msgs.forEach(function (m, i) {
+      var dk = dayKey(m.ts);
+      if (dk !== prevDay) {
+        var d = document.createElement('div');
+        d.className = 'day'; d.textContent = fmtDay(m.ts);
+        frag.appendChild(d); prevDay = dk;
+      }
+      var prev = msgs[i - 1], next = msgs[i + 1];
+      var mine = m.u === uid;
+      var sameAsPrev = prev && prev.u === m.u && dayKey(prev.ts) === dk && (m.ts - prev.ts) < 5 * 60000;
+      var sameAsNext = next && next.u === m.u && dayKey(next.ts) === dk && (next.ts - m.ts) < 5 * 60000;
+
+      var row = document.createElement('div');
+      row.className = 'row ' + (mine ? 'mine' : 'theirs') + (sameAsPrev ? '' : ' first') + (sameAsNext ? '' : ' last');
+
+      if (!mine && !sameAsPrev) {
+        var w = document.createElement('div');
+        w.className = 'who'; w.textContent = m.n || '상대';
+        row.appendChild(w);
+      }
+
+      var line = document.createElement('div');
+      line.className = 'line';
+      var b = document.createElement('div');
+      b.className = 'bubble'; b.textContent = m.t;
+      line.appendChild(b);
+
+      if (m.state === 'fail') {
+        var f = document.createElement('button');
+        f.className = 'meta fail'; f.type = 'button'; f.textContent = '전송 실패 · 다시 보내기';
+        f.onclick = function () { retry(m); };
+        line.appendChild(f);
+      } else if (m.state === 'sending') {
+        var s = document.createElement('span');
+        s.className = 'meta'; s.textContent = '전송 중…';
+        line.appendChild(s);
+      } else if (!sameAsNext) {
+        var t = document.createElement('span');
+        t.className = 'meta'; t.textContent = fmtTime(m.ts);
+        line.appendChild(t);
+      }
+      row.appendChild(line);
+      frag.appendChild(row);
+    });
+
+    list.textContent = '';
+    list.appendChild(frag);
+    if (nearBottom) list.scrollTop = list.scrollHeight;
+  }
+
+  function setStatus(kind, text) {
+    var d = $('dot');
+    d.className = 'dot ' + (kind === 'on' ? 'on' : kind === 'wait' ? 'wait' : '');
+    $('hSub').textContent = text;
+  }
+
+  function banner(text) {
+    var b = $('banner');
+    b.textContent = text || '';
+    b.hidden = !text;
+  }
+
+  // =====================================================================
+  // 서버 연결 (받기)
+  // =====================================================================
+  function connect() {
+    if (!room) return;
+    clearTimeout(retryTimer);
+    if (es) { es.close(); es = null; }
+    setStatus('wait', '연결 중…');
+    var url = RELAY + room.topic + '/sse?since=' + encodeURIComponent(lastNtfy || 'all');
+    try { es = new EventSource(url); } catch (e) { scheduleRetry(); return; }
+    var mine = es;
+
+    es.onopen = function () {
+      if (es !== mine) return;
+      retryMs = 2000; banner('');
+      setStatus('on', '연결됨');
+      // 연결이 끊긴 사이 실패한 메시지 자동 재전송
+      msgs.filter(function (m) { return m.state === 'fail' && m.u === uid; }).forEach(retry);
+    };
+    es.addEventListener('message', function (ev) {
+      if (es !== mine) return;
+      var d;
+      try { d = JSON.parse(ev.data); } catch (e) { return; }
+      if (!d || d.event !== 'message' || typeof d.message !== 'string') return;
+      lastNtfy = d.id || lastNtfy;
+      handleIncoming(d.message);
+    });
+    es.onerror = function () {
+      if (es !== mine) return;
+      mine.close(); es = null;
+      setStatus('off', navigator.onLine === false ? '오프라인' : '다시 연결 중…');
+      scheduleRetry();
+    };
+  }
+
+  function scheduleRetry() {
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(connect, retryMs);
+    retryMs = Math.min(retryMs * 1.7, 20000);
+  }
+
+  async function handleIncoming(payload) {
+    var o;
+    try { o = await decrypt(room.key, payload); } catch (e) { return; }   // 열 수 없는 메시지는 무시
+    if (!o || typeof o.id !== 'string' || typeof o.t !== 'string' || typeof o.u !== 'string') return;
+    var m = { id: o.id, u: o.u, n: String(o.n || '').slice(0, 12), t: o.t.slice(0, 3000), ts: Number(o.ts) || Date.now(), state: 'ok' };
+    var existing = null;
+    for (var i = 0; i < msgs.length; i++) if (msgs[i].id === m.id) { existing = msgs[i]; break; }
+    if (existing) {                       // 내가 보낸 메시지가 서버를 거쳐 돌아옴
+      if (existing.state !== 'ok') { existing.state = 'ok'; saveHist(); render(false); }
+      return;
+    }
+    addMsg(m);
+    saveHist();
+    render(false);
+    if (m.u !== uid && document.hidden) {
+      unread++; document.title = '(' + unread + ') 둘이서';
+    }
+    if (m.u !== uid) $('hTitle').textContent = m.n || $('hTitle').textContent;
+  }
+
+  // =====================================================================
+  // 보내기
+  // =====================================================================
+  async function publish(m) {
+    var payload = await encrypt(room.key, { id: m.id, u: m.u, n: m.n, t: m.t, ts: m.ts });
+    var res = await fetch(RELAY + room.topic, { method: 'POST', body: payload });
+    if (!res.ok) throw new Error('http ' + res.status);
+  }
+
+  async function deliver(m) {
+    try {
+      await publish(m);
+      if (m.state === 'sending' || m.state === 'fail') m.state = 'ok';
+      banner('');
+    } catch (e) {
+      m.state = 'fail';
+      if (String(e.message).indexOf('429') > -1) banner('메시지를 너무 빨리, 또는 너무 많이 보냈어요. 잠시 후 다시 시도해 주세요.');
+    }
+    saveHist(); render(false);
+  }
+
+  function retry(m) {
+    if (m.state === 'sending') return;
+    m.state = 'sending'; render(false);
+    deliver(m);
+  }
+
+  function send() {
+    var input = $('input');
+    var text = input.value.replace(/\s+$/g, '');
+    if (!text.trim()) return;
+    if (enc.encode(text).length > MAX_TEXT_BYTES) {
+      banner('메시지가 너무 길어요. 조금 나눠서 보내 주세요.');
+      return;
+    }
+    banner('');
+    var m = { id: uuid(), u: uid, n: myName, t: text, ts: Date.now(), state: 'sending' };
+    addMsg(m);
+    input.value = ''; autosize(); updateSend();
+    render(true);
+    deliver(m);
+    input.focus();
+  }
+
+  // =====================================================================
+  // 입력창
+  // =====================================================================
+  var input = $('input');
+  function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; }
+  function updateSend() { $('send').disabled = !input.value.trim(); }
+  input.addEventListener('input', function () { autosize(); updateSend(); });
+  input.addEventListener('keydown', function (e) {
+    // 키보드가 달린 환경에서는 Enter로 전송, Shift+Enter는 줄바꿈 (터치 화면에서는 줄바꿈)
+    var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) { e.preventDefault(); send(); }
+  });
+  $('composer').addEventListener('submit', function (e) { e.preventDefault(); send(); });
+
+  // =====================================================================
+  // 시작/입장
+  // =====================================================================
+  async function enterRoom(secret) {
+    var d = await derive(secret);
+    room = { secret: secret, topic: d.topic, key: d.key };
+    sset('chat.secret', secret);
+    loadHist();
+    $('hTitle').textContent = '둘이서';
+    showApp();
+    connect();
+  }
+
+  function inviteUrl() {
+    var base = location.href.split('#')[0];
+    return base + '#' + room.secret;
+  }
+
+  $('wName').addEventListener('input', function () { $('wGo').disabled = !$('wName').value.trim(); });
+  $('wName').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing && !$('wGo').disabled) $('wGo').click(); });
+
+  $('wGo').addEventListener('click', async function () {
+    var name = $('wName').value.trim().slice(0, 12);
+    if (!name) return;
+    myName = name; sset('chat.name', name);
+    $('welcomeErr').textContent = '';
+    try {
+      var hashSecret = decodeURIComponent(location.hash.slice(1));
+      var secret = hashSecret || randomSecret();
+      await enterRoom(secret);
+      if (location.hash) history.replaceState(null, '', location.href.split('#')[0]);
+      if (!hashSecret) openSheet(true);     // 새로 만들었으면 바로 초대 링크를 보낼 수 있게
+    } catch (e) {
+      $('welcomeErr').textContent = '이 브라우저에서는 암호화 기능을 쓸 수 없어요. Safari 최신 버전, HTTPS 주소에서 열어 주세요.';
+    }
+  });
+
+  // =====================================================================
+  // 설정 시트
+  // =====================================================================
+  function openSheet(fromCreate) {
+    $('sName').value = myName;
+    $('linkBox').hidden = true;
+    show($('sheetWrap'), true);
+    if (fromCreate) $('shareBtn').focus();
+  }
+  function closeSheet() {
+    var n = $('sName').value.trim().slice(0, 12);
+    if (n && n !== myName) { myName = n; sset('chat.name', n); }
+    show($('sheetWrap'), false);
+    $('input').focus();
+  }
+  $('menuBtn').addEventListener('click', function () { openSheet(false); });
+  $('closeBtn').addEventListener('click', closeSheet);
+  $('sheetWrap').addEventListener('click', function (e) { if (e.target === $('sheetWrap')) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheetWrap').hidden) closeSheet(); });
+
+  $('shareBtn').addEventListener('click', async function () {
+    var url = inviteUrl();
+    if (navigator.share) {
+      try { await navigator.share({ title: '둘이서', text: '같이 대화해요', url: url }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    // 공유를 쓸 수 없으면 링크를 보여주고 선택해 둔다
+    var box = $('linkBox');
+    box.value = url; box.hidden = false; box.focus(); box.select();
+    try { await navigator.clipboard.writeText(url); } catch (e) {}
+  });
+
+  $('clearBtn').addEventListener('click', function () {
+    if (!confirm('이 기기에 저장된 대화 내용을 지울까요? 상대 기기에는 영향이 없어요.')) return;
+    msgs = []; seen = {}; sdel(histKey()); render(true);
+    closeSheet();
+  });
+
+  $('leaveBtn').addEventListener('click', function () {
+    if (!confirm('대화방을 나갈까요? 이 기기의 대화 내용이 지워지고, 같은 초대 링크로만 다시 들어올 수 있어요.')) return;
+    if (es) { es.close(); es = null; }
+    clearTimeout(retryTimer);
+    sdel(histKey()); sdel('chat.last.' + room.topic); sdel('chat.secret');
+    room = null; msgs = []; seen = {};
+    show($('sheetWrap'), false);
+    showWelcome(false);
+  });
+
+  // =====================================================================
+  // 화면 복귀 / 네트워크 상태
+  // =====================================================================
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) {
+      unread = 0; document.title = '둘이서';
+      if (room && !es) connect();
+    }
+  });
+  window.addEventListener('online', function () { if (room) { retryMs = 1000; connect(); } });
+  window.addEventListener('offline', function () { setStatus('off', '오프라인'); });
+
+  // =====================================================================
+  // 시작
+  // =====================================================================
+  (async function boot() {
+    if (!window.crypto || !crypto.subtle || !window.TextEncoder) {
+      showWelcome(false);
+      $('welcomeErr').textContent = '이 브라우저에서는 사용할 수 없어요. HTTPS 주소에서 Safari 최신 버전으로 열어 주세요.';
+      $('wGo').disabled = true;
+      return;
+    }
+    var hashSecret = '';
+    try { hashSecret = decodeURIComponent(location.hash.slice(1)); } catch (e) {}
+    var saved = sget('chat.secret');
+
+    if (hashSecret && hashSecret !== saved) {
+      // 초대 링크로 들어옴
+      if (saved && !confirm('다른 대화방으로 들어갈까요? 지금 대화방의 이 기기 기록은 새 방에서 보이지 않아요.')) {
+        history.replaceState(null, '', location.href.split('#')[0]);
+      } else {
+        if (myName) { await joinWithName(hashSecret); return; }
+        showWelcome(true);
+        return;
+      }
+    }
+    if (saved && myName) {
+      try { await enterRoom(saved); } catch (e) { showWelcome(false); }
+      if (location.hash) history.replaceState(null, '', location.href.split('#')[0]);
+      return;
+    }
+    showWelcome(false);
+  })();
+
+  async function joinWithName(secret) {
+    try {
+      await enterRoom(secret);
+      history.replaceState(null, '', location.href.split('#')[0]);
+    } catch (e) { showWelcome(true); }
+  }
+})();
+</script>
+</body>
+</html>
