@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>무음 카메라</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #111111; --muted: #666666; --card: #f2f2f2; --accent: #2563eb;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #111111; --fg: #f2f2f2; --muted: #999999; --card: #222222; --accent: #60a5fa; }
+  }
+  :root[data-theme="dark"] { --bg: #111111; --fg: #f2f2f2; --muted: #999999; --card: #222222; --accent: #60a5fa; }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 12px; }
+  .view { position: relative; background: #000; border-radius: 14px; overflow: hidden; }
+  video { width: 100%; max-height: 70vh; display: block; background: #000; object-fit: contain; }
+  .row { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+  button { font: inherit; border: 0; border-radius: 12px; padding: 12px 18px; background: var(--card); color: var(--fg); }
+  button.shot { width: 76px; height: 76px; border-radius: 50%; background: #fff; border: 5px solid var(--accent); padding: 0; }
+  button.shot:active { transform: scale(.92); }
+  #start { background: var(--accent); color: #fff; font-weight: 600; }
+  #msg { text-align: center; color: var(--muted); font-size: 14px; margin: 8px 0; white-space: pre-line; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .15s; }
+  #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 8px; }
+  .item { background: var(--card); border-radius: 12px; padding: 8px; }
+  .item img { width: 100%; border-radius: 8px; display: block; -webkit-touch-callout: default; }
+  .item .btns { display: flex; gap: 6px; margin-top: 6px; }
+  .item button { flex: 1; padding: 8px; font-size: 13px; }
+  h2 { font-size: 15px; margin: 18px 0 4px; }
+  .hint { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="view">
+    <video id="v" autoplay playsinline muted></video>
+    <div id="flash"></div>
+  </div>
+  <div id="msg">아래 '카메라 켜기'를 누르고 카메라 접근을 허용해 주세요.</div>
+  <div class="row">
+    <button id="start">카메라 켜기</button>
+    <button id="shot" class="shot" aria-label="촬영" style="display:none"></button>
+    <button id="flip" style="display:none">전/후면 전환</button>
+  </div>
+  <h2>찍은 사진</h2>
+  <div class="hint">사진을 길게 누르면 '사진에 추가'로 저장할 수 있습니다. 공유 버튼으로 저장해도 됩니다.</div>
+  <div id="gallery"></div>
+</div>
+<canvas id="c" style="display:none"></canvas>
+<script>
+(function () {
+  var v = document.getElementById('v');
+  var c = document.getElementById('c');
+  var msg = document.getElementById('msg');
+  var startBtn = document.getElementById('start');
+  var shotBtn = document.getElementById('shot');
+  var flipBtn = document.getElementById('flip');
+  var gallery = document.getElementById('gallery');
+  var flash = document.getElementById('flash');
+  var stream = null;
+  var facing = 'environment';
+  var count = 0;
+
+  function setMsg(t) { msg.textContent = t; }
+
+  async function open() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMsg('이 화면에서는 카메라를 쓸 수 없습니다.\n링크를 Safari 브라우저에서 직접 열어 주세요.');
+      return;
+    }
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facing }, width: { ideal: 4096 }, height: { ideal: 3072 } },
+        audio: false
+      });
+      v.srcObject = stream;
+      await v.play();
+      startBtn.style.display = 'none';
+      shotBtn.style.display = '';
+      flipBtn.style.display = '';
+      setMsg('준비 완료. 동그란 버튼을 누르면 무음으로 촬영됩니다.');
+    } catch (e) {
+      setMsg('카메라를 열지 못했습니다: ' + (e && e.name ? e.name : e) +
+        '\n허용을 거부했다면 설정 > Safari > 카메라에서 허용해 주세요.\n앱 안의 미리보기라면 링크를 Safari에서 직접 열어 주세요.');
+    }
+  }
+
+  function capture() {
+    if (!v.videoWidth) return;
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    flash.style.opacity = '0.6';
+    setTimeout(function () { flash.style.opacity = '0'; }, 120);
+    c.toBlob(function (blob) {
+      if (!blob) return;
+      count++;
+      var url = URL.createObjectURL(blob);
+      var name = 'photo_' + count + '.jpg';
+      var item = document.createElement('div');
+      item.className = 'item';
+      var img = document.createElement('img');
+      img.src = url;
+      img.alt = name;
+      var btns = document.createElement('div');
+      btns.className = 'btns';
+      var share = document.createElement('button');
+      share.textContent = '공유/저장';
+      share.onclick = async function () {
+        try {
+          var file = new File([blob], name, { type: 'image/jpeg' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file] });
+          } else {
+            setMsg('공유를 지원하지 않습니다. 사진을 길게 눌러 저장해 주세요.');
+          }
+        } catch (e) { /* 사용자가 취소 */ }
+      };
+      var del = document.createElement('button');
+      del.textContent = '삭제';
+      del.onclick = function () { URL.revokeObjectURL(url); item.remove(); };
+      btns.appendChild(share);
+      btns.appendChild(del);
+      item.appendChild(img);
+      item.appendChild(btns);
+      gallery.insertBefore(item, gallery.firstChild);
+    }, 'image/jpeg', 0.95);
+  }
+
+  startBtn.onclick = open;
+  shotBtn.onclick = capture;
+  flipBtn.onclick = function () { facing = facing === 'environment' ? 'user' : 'environment'; open(); };
+})();
+</script>
+</body>
+</html>
