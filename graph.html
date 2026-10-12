@@ -609,7 +609,7 @@ function applyResult(d){
   raw.forEach(function(r){
     if(!r||typeof r!=="object")return;
     var k=r.kind,o=null;
-    if(k==="function"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr),dmin:num(r.dmin),dmax:num(r.dmax)};
+    if(k==="function"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr),dmin:null,dmax:null};
     else if(k==="implicit"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr)};
     else if(k==="vline"&&r.expr!=null)o={kind:k,text:r.text,expr:String(r.expr)};
     else if(k==="parametric"&&r.expr&&r.expr2)o={kind:k,text:r.text,expr:r.expr+", "+r.expr2,tmin:num(r.tmin),tmax:num(r.tmax)};
