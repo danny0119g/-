@@ -688,6 +688,12 @@ async function readFormula(b64){
     setStatus(ab?"중단했습니다.":"읽기에 실패했습니다. 네트워크를 확인해 주세요.",!ab);
   }finally{clearTimeout(kill);}
 }
+function keepCam(){
+  if($("rv").classList.contains("on")||!$("gv").hidden)return;
+  var t=stream&&stream.getVideoTracks()[0];
+  if(!t||t.readyState==="ended"){startCamera();return;}
+  var p=v.play();if(p&&p.catch)p.catch(function(){startCamera();});
+}
 var rvUrl="";
 function review(){
   v.pause();row.classList.remove("on");setMsg("");
@@ -710,6 +716,7 @@ shotBtn.onclick=capture;
 flipBtn.onclick=function(){facing=facing==="environment"?"user":"environment";startCamera();};
 $("gear").onclick=function(){
   var k=prompt("Gemini API 키를 입력하세요. (aistudio.google.com에서 무료 발급)\n이 기기의 브라우저에만 저장됩니다. 비우고 확인하면 삭제됩니다.","");
+  setTimeout(keepCam,0);setTimeout(keepCam,500);
   if(k===null)return;
   k=k.trim();var ok=setKey(k);
   setMsg(!ok?"키를 저장하지 못했습니다.":k?"키를 저장했습니다.":"키를 삭제했습니다.",2000);
