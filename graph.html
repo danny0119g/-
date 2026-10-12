@@ -106,6 +106,18 @@
     #albumBtn { order: 3; justify-self: center; align-self: center; }
   }
 
+  .gcard[hidden] { display: none; }
+  .pad { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+  .pad button { min-height: 44px; padding: 4px 2px; border-radius: 10px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); font-weight: 700; font-size: 16px; }
+  .pad button.fn { font-family: var(--f-mono); font-size: 14px; }
+  .pad button.act { background: var(--card); color: var(--muted); }
+  .pad button:active { background: var(--accent); color: var(--accent-ink); }
+  .prm { display: flex; flex-direction: column; gap: 10px; }
+  .prow { display: grid; grid-template-columns: auto 1fr 86px; gap: 10px; align-items: center; }
+  .prow .nm { font-family: var(--f-mono); font-weight: 800; font-size: 18px; min-width: 2ch; }
+  .prow input[type=range] { width: 100%; min-width: 0; height: 32px; accent-color: var(--c2); }
+  .prow input[type=text] { min-width: 0; width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font-family: var(--f-mono); font-size: 15px; }
+
   /* ---- 촬영 후 확인 바 ---- */
   #rv { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: none; gap: 12px; align-items: center; justify-content: center;
     padding: 20px 24px calc(20px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0)); }
@@ -204,13 +216,19 @@
       </div>
       <p class="hint">한 손가락으로 끌면 이동, 두 손가락으로 확대·축소.</p>
     </div>
+    <div class="gcard" id="pcard" hidden>
+      <div class="glabel">상수 조절</div>
+      <div class="prm" id="prm"></div>
+      <p class="hint">식에 정해지지 않은 상수가 있으면 슬라이더로 값을 바꿔 보세요. 같은 문자는 모든 식에 함께 적용돼요.</p>
+    </div>
     <div class="gcard">
       <div class="glabel">읽은 식</div>
       <ul class="items" id="items"></ul>
       <div class="add">
-        <input id="addIn" type="text" placeholder="식 추가 예: y = x^2 - 4x + 3  /  x^2 + y^2 = 9  /  x = 2" autocomplete="off" spellcheck="false">
+        <input id="addIn" type="text" placeholder="식 입력 (예: x^2-4x+3, y=sin(x), x^2+y^2=9)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
         <button id="addBtn" class="gbtn sub">추가</button>
       </div>
+      <div class="pad" id="pad" aria-label="수식 키패드"></div>
       <p class="hint" id="addErr" hidden></p>
     </div>
     <span id="exBadge" hidden></span>
@@ -225,6 +243,7 @@ var $=function(id){return document.getElementById(id);};
 var MATHN="sin|cos|tan|asin|acos|atan2|atan|sinh|cosh|tanh|sqrt|cbrt|abs|exp|floor|ceil|round|trunc|sign|log10|log2|log|pow|min|max|hypot|PI|E";
 var FN=["asin","acos","atan","sinh","cosh","tanh","sin","cos","tan","sqrt","cbrt","abs","exp","floor","ceil","sign","log10","ln","log"];
 
+var PARAMS="abcdkmnpqrs",NP=[],PV={},PR={};
 /* ---------- 식 → 계산 함수 ---------- */
 function norm(src){
   var s=String(src).replace(/\s+/g," ").trim();
@@ -234,17 +253,18 @@ function norm(src){
   s=s.replace(new RegExp("(?<![.\\w\\uE000-\\uF8FF])("+FN.join("|")+")\\s*\\(","g"),function(m,n){
     return PH("Math."+(n==="ln"?"log":n==="log"?"log10":n))+"(";});
   s=s.replace(/(?<![.A-Za-z_])pi\b/gi,"PI").replace(/(?<![.\w])e\b/g,"E").replace(/(?<=\d)e\b(?![+-]?\d)/g,"E");
-  s=s.replace(/(\d|\))\s*(?=[xytE(-]|PI)/g,"$1*");
-  s=s.replace(/([xytE]|PI)\s*(?=[xyt(-]|PI|E)/g,"$1*");
+  s=s.replace(/(\d|\))\s*(?=[xytEabcdkmnpqrs(-]|PI)/g,"$1*");
+  s=s.replace(/([xytEabcdkmnpqrs]|PI)\s*(?=[xytabcdkmnpqrs(-]|PI|E)/g,"$1*");
   s=s.replace(/[-]/g,function(c){return ph[c.charCodeAt(0)-0xE000];});
   var t=s.replace(new RegExp("Math\\.("+MATHN+")\\b","g"),"").replace(/\bPI\b|\bE\b/g,"").replace(/\d+\.?\d*(e[+-]?\d+)?|\.\d+/gi,"");
-  if(/[^xyt\s+\-*\/().,<>=?:&|!%]/.test(t)) throw new Error("bad");
+  var mm=t.match(/[abcdkmnpqrs]/g);NP=mm?mm.filter(function(c,i){return mm.indexOf(c)===i;}):[];
+  if(/[^xytabcdkmnpqrs\s+\-*\/().,<>=?:&|!%]/.test(t)) throw new Error("bad");
   return s;
 }
 function compile(src){
   var s=norm(src);
-  var f=new Function("x","y","t","PI","E","Math","return ("+s+");");
-  return function(x,y,t){return f(x,y,t,Math.PI,Math.E,Math);};
+  var f=new Function("x","y","t","PI","E","Math","a","b","c","d","k","m","n","p","q","r","s","return ("+s+");");
+  return function(x,y,t){return f(x,y,t,Math.PI,Math.E,Math,PV.a,PV.b,PV.c,PV.d,PV.k,PV.m,PV.n,PV.p,PV.q,PV.r,PV.s);};
 }
 function splitTop(s){
   var out=[],d=0,cur="";
@@ -255,20 +275,26 @@ function splitTop(s){
 }
 
 /* ---------- 항목 ---------- */
-var items=[],colorN=0;
+var items=[],colorN=0,prev=null;
+function cp(src,it){var f=compile(src);NP.forEach(function(c){if(it._pr.indexOf(c)<0)it._pr.push(c);});return f;}
 function build(it){
-  it._err=false;it._f=it._g=null;
+  it._err=false;it._f=it._g=null;it._pr=[];
   try{
     if(it.kind==="parametric"||it.kind==="point"){
       var p=splitTop(it.expr);if(p.length!==2)throw new Error("n");
-      it._f=compile(p[0]);it._g=compile(p[1]);
+      it._f=cp(p[0],it);it._g=cp(p[1],it);
     }else if(it.kind==="vline"){
-      var c=compile(it.expr)(0,0,0);if(typeof c!=="number"||!isFinite(c))throw new Error("n");it._c=c;
-    }else it._f=compile(it.expr);
+      it._f=cp(it.expr,it);var c=it._f(0,0,0);if(typeof c!=="number"||!isFinite(c))throw new Error("n");
+    }else it._f=cp(it.expr,it);
   }catch(e){it._err=true;}
 }
+function pretty(e){
+  return String(e).replace(/Math\.log10\(/g,"log(").replace(/Math\.log\(/g,"ln(").replace(/Math\.PI/g,"π").replace(/Math\.E\b/g,"e")
+    .replace(/Math\./g,"").replace(/\*\*/g,"^").replace(/(\d)\s*\*\s*(?=[a-df-z(])/g,"$1");
+}
+function implicitExpr(raw){var q=raw.split("=");return q.length===2?"("+q[0]+")-("+q[1]+")":raw;}
 function mk(o){
-  var it={kind:o.kind,text:o.text||o.expr,expr:o.expr,dmin:o.dmin==null?null:o.dmin,dmax:o.dmax==null?null:o.dmax,
+  var it={kind:o.kind,text:o.text||o.expr,expr:o.expr,disp:o.disp!=null?o.disp:pretty(o.expr),dmin:o.dmin==null?null:o.dmin,dmax:o.dmax==null?null:o.dmax,
     tmin:o.tmin==null?0:o.tmin,tmax:o.tmax==null?2*Math.PI:o.tmax,open:!!o.open,on:true,ci:colorN++%6};
   build(it);return it;
 }
@@ -278,7 +304,7 @@ function parseManual(str){
   var m;
   if((m=s.match(/^(?:y|f\(x\))\s*=\s*(.+)$/i)))return {kind:"function",text:"y = "+m[1],expr:m[1]};
   if((m=s.match(/^x\s*=\s*([^=<>]+)$/i)))return {kind:"vline",text:"x = "+m[1],expr:m[1]};
-  if(/^[^=<>]*=[^=<>]*$/.test(s)){var q=s.split("=");return {kind:"implicit",text:s,expr:"("+q[0]+")-("+q[1]+")"};}
+  if(/^[^=<>]*=[^=<>]*$/.test(s)){var q=s.split("=");return {kind:"implicit",text:s,disp:s,expr:"("+q[0]+")-("+q[1]+")"};}
   return {kind:"function",text:"y = "+s,expr:s};
 }
 
@@ -338,16 +364,21 @@ function paint(){
   ctx.lineJoin="round";ctx.lineCap="round";
   for(i=0;i<items.length;i++){
     var it=items[i];if(!it.on||it._err)continue;
-    var col=css("--c"+(1+it.ci));ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=2.6;ctx.setLineDash([]);
-    try{
-      if(it.kind==="function")drawFn(it);
-      else if(it.kind==="implicit")drawImp(it);
-      else if(it.kind==="parametric")drawPar(it);
-      else if(it.kind==="vline"){ctx.setLineDash([7,6]);ctx.lineWidth=2;var u=Math.round(px(it._c))+.5;ctx.beginPath();ctx.moveTo(u,0);ctx.lineTo(u,H);ctx.stroke();}
-      else if(it.kind==="point")drawPt(it,col);
-    }catch(e){}
+    drawOne(it,css("--c"+(1+it.ci)),false);
   }
+  if(prev&&!prev._err)drawOne(prev,css("--muted"),true);
   ctx.restore();
+}
+function drawOne(it,col,ghost){
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=ghost?2.2:2.6;ctx.setLineDash(ghost?[6,5]:[]);
+  try{
+    if(it.kind==="function")drawFn(it);
+    else if(it.kind==="implicit")drawImp(it);
+    else if(it.kind==="parametric")drawPar(it);
+    else if(it.kind==="vline"){var X=it._f(0,0,0);if(isFinite(X)){ctx.setLineDash([7,6]);ctx.lineWidth=2;var u=Math.round(px(X))+.5;ctx.beginPath();ctx.moveTo(u,0);ctx.lineTo(u,H);ctx.stroke();}}
+    else if(it.kind==="point")drawPt(it,col);
+  }catch(e){}
+  ctx.setLineDash([]);
 }
 function drawFn(it){
   ctx.beginPath();var pen=false,pp=0,q,x,y,yy;
@@ -437,7 +468,7 @@ $("zout").onclick=function(){zoomAt(W/2,H/2,1/1.4);};
 $("fit").onclick=function(){fitTo(lastView);};
 
 /* ---------- 식 목록 ---------- */
-var KL={"function":"y =","implicit":"좌변 − 우변 =","vline":"x =","parametric":"(x(t), y(t))","point":"(x, y)"};
+var KL={"function":"y =","implicit":"x, y 식","vline":"x =","parametric":"(x(t), y(t))","point":"(x, y)"};
 function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e;}
 function numInput(val,onv){
   var i=el("input","num");i.type="text";i.inputMode="decimal";i.value=val==null?"":String(val);
@@ -456,9 +487,9 @@ function render(){
     del.onclick=function(){items=items.filter(function(o){return o!==it;});render();draw();};
     li.append(sw,tx,del);
     var ed=el("div","ed");ed.appendChild(el("span","k",KL[it.kind]||""));
-    var inp=el("input");inp.type="text";inp.value=it.expr;inp.spellcheck=false;inp.setAttribute("aria-label","식 수정");
+    var inp=el("input");inp.type="text";inp.value=it.disp;inp.autocapitalize="off";inp.setAttribute("autocorrect","off");inp.spellcheck=false;inp.setAttribute("aria-label","식 수정");
     var chk=function(){inp.style.borderColor=it._err?"var(--danger)":"";};chk();
-    inp.addEventListener("input",function(){it.expr=inp.value;build(it);chk();draw();});
+    inp.addEventListener("input",function(){var raw=inp.value;it.disp=raw;it.expr=(it.kind==="implicit"&&raw.indexOf("=")>=0)?implicitExpr(raw):raw;build(it);chk();renderParams();draw();});
     ed.appendChild(inp);
     if(it.kind==="function"){
       ed.append(el("span","k","x 범위"),numInput(it.dmin,function(v){it.dmin=v;}),el("span","k","~"),numInput(it.dmax,function(v){it.dmax=v;}));
@@ -471,15 +502,90 @@ function render(){
     li.appendChild(ed);ul.appendChild(li);
   });
   if(!items.length){var e=el("li","hint","표시할 식이 없습니다. 사진을 올리거나 아래에 식을 입력하세요.");ul.appendChild(e);}
+  renderParams();
 }
-function addErr(msg){var h=$("addErr");h.hidden=!msg;h.textContent=msg||"";}
+function setHint(msg,err){var h=$("addErr");h.hidden=!msg;h.textContent=msg||"";h.style.color=err?"var(--danger)":"";}
+function addErr(msg){setHint(msg,!!msg);}
 function addManual(){
   var v=$("addIn").value;if(!v.trim())return;
   try{
     var it=mk(parseManual(v));
     if(it._err)throw new Error("bad");
-    items.push(it);addErr("");$("addIn").value="";$("exBadge").hidden=true;render();draw();
+    items.push(it);addErr("");$("addIn").value="";prev=null;$("exBadge").hidden=true;render();draw();
   }catch(e){addErr("이 식은 그릴 수 없어요. 곱셈은 2x 또는 2*x, 거듭제곱은 x^2, 함수는 sin(x), sqrt(x), abs(x), ln(x)처럼 적어 주세요.");}
+}
+function previewUpdate(){
+  var v=$("addIn").value;
+  if(!v.trim()){prev=null;setHint("");draw();return;}
+  try{
+    var save=colorN,it=mk(parseManual(v));colorN=save;
+    if(it._err)throw new Error("bad");
+    prev=it;setHint("점선으로 미리 보여 줘요. 추가를 누르면 목록에 들어가요.",false);
+  }catch(e){prev=null;setHint("식을 완성하면 미리 보여 줘요. 곱셈은 2x, 거듭제곱은 x^2처럼 적어요.",false);}
+  draw();
+}
+$("addIn").addEventListener("input",previewUpdate);
+var lastIn=null;
+document.addEventListener("focusin",function(e){var t=e.target;if(t&&t.matches&&t.matches("#addIn,.item input[type=text]:not(.num)"))lastIn=t;});
+function targetIn(){return(lastIn&&document.body.contains(lastIn))?lastIn:$("addIn");}
+function fire(i){i.dispatchEvent(new Event("input",{bubbles:true}));}
+function keyIns(txt){
+  var i=targetIn(),act=document.activeElement===i,a=act?i.selectionStart:i.value.length,b=act?i.selectionEnd:i.value.length;
+  i.setRangeText(txt,a,b,"end");fire(i);
+}
+function keyBack(){
+  var i=targetIn(),act=document.activeElement===i,a=act?i.selectionStart:i.value.length,b=act?i.selectionEnd:i.value.length;
+  if(a===b){if(a===0)return;a=a-1;}
+  i.setRangeText("",a,b,"end");fire(i);
+}
+var KEYS=[["x","x"],["y","y"],["a","a"],["b","b"],["c","c"],["k","k"],["x²","^2"],["xⁿ","^"],["√","sqrt("],["π","π"],["e","e"],["(","("],[")",")"],["+","+"],["−","-"],["×","*"],["÷","/"],["=","="],["sin","sin(","fn"],["cos","cos(","fn"],["tan","tan(","fn"],["ln","ln(","fn"],["log","log(","fn"],["|x|","abs(","fn"],["⌫","BS","act"],["지우기","CLR","act"]];
+(function(){
+  var pad=$("pad");
+  KEYS.forEach(function(k){
+    var b=el("button",k[2]||"",k[0]);b.type="button";
+    b.setAttribute("aria-label",k[2]==="act"?k[0]:k[0]+" 입력");
+    var keep=function(e){e.preventDefault();};
+    b.addEventListener("pointerdown",keep);b.addEventListener("mousedown",keep);
+    b.addEventListener("click",function(){
+      if(k[1]==="BS")keyBack();
+      else if(k[1]==="CLR"){var i=targetIn();i.value="";fire(i);}
+      else keyIns(k[1]);
+    });
+    pad.appendChild(b);
+  });
+})();
+function resetParams(ps){
+  PV={};PR={};
+  PARAMS.split("").forEach(function(c){PV[c]=1;PR[c]={min:-5,max:5};});
+  if(ps&&typeof ps==="object")Object.keys(ps).forEach(function(c){
+    if(c.length!==1||PARAMS.indexOf(c)<0)return;var q=ps[c];if(!q||typeof q!=="object")return;
+    var lo=num(q.min),hi=num(q.max),val=num(q.val);
+    if(lo!=null&&hi!=null&&hi>lo)PR[c]={min:lo,max:hi};
+    if(val!=null){PV[c]=val;if(val<PR[c].min)PR[c].min=val;if(val>PR[c].max)PR[c].max=val;}
+  });
+  $("prm").dataset.k="";
+}
+function renderParams(){
+  var set={},box=$("prm"),card=$("pcard");
+  items.forEach(function(it){if(it.on&&!it._err)(it._pr||[]).forEach(function(c){set[c]=1;});});
+  var list=PARAMS.split("").filter(function(c){return set[c];}),key=list.join("");
+  if(!list.length){card.hidden=true;box.textContent="";box.dataset.k="";return;}
+  card.hidden=false;
+  if(box.dataset.k===key)return;
+  box.dataset.k=key;box.textContent="";
+  list.forEach(function(c){
+    var row=el("div","prow"),nm=el("span","nm",c),rg=el("input"),nb=el("input"),q=PR[c];
+    rg.type="range";nb.type="text";nb.inputMode="decimal";
+    rg.min=q.min;rg.max=q.max;rg.step=(q.max-q.min)>20?0.5:0.1;rg.value=PV[c];nb.value=String(PV[c]);
+    rg.setAttribute("aria-label","상수 "+c);nb.setAttribute("aria-label","상수 "+c+" 값");
+    rg.addEventListener("input",function(){PV[c]=Number(rg.value);nb.value=String(Math.round(PV[c]*100)/100);draw();});
+    nb.addEventListener("input",function(){
+      if(nb.value.trim()==="")return;var n=num(nb.value);if(n==null)return;
+      PV[c]=n;if(n<Number(rg.min))rg.min=PR[c].min=Math.floor(n);if(n>Number(rg.max))rg.max=PR[c].max=Math.ceil(n);
+      rg.value=n;draw();
+    });
+    row.append(nm,rg,nb);box.appendChild(row);
+  });
 }
 $("addBtn").onclick=addManual;
 $("addIn").addEventListener("keydown",function(e){if(e.key==="Enter")addManual();});
@@ -502,6 +608,7 @@ var PROMPT=[
 '{"kind":"vline","text":"x = 2","expr":"2"}  vertical line or asymptote.',
 '{"kind":"parametric","text":"(cos t, sin t)","expr":"Math.cos(t)","expr2":"Math.sin(t)","tmin":0,"tmax":6.2832}',
 '{"kind":"point","text":"(1, 2)","x":1,"y":2,"open":false}  open=true for a hollow endpoint.',
+"Constants: if a formula has an undetermined constant (such as a, b, c, k, m, n, p, q, r, s), keep it as that lowercase letter in expr and text and do not choose a number for it. If the problem states its value (for example a=2), substitute the value. Optionally add \"params\":{\"a\":{\"val\":1,\"min\":-5,\"max\":5}} to the reply to suggest a start value and slider range for each such letter. Never use x, y, t or e as a constant.",
 "Rules: use only what is visible in the photo, never invent a formula. A horizontal asymptote or a line like y = 2 is a function item. For inequalities or regions, draw only the boundary curve and mention that in reading. If a problem has several curves, include all of them (at most 8 items). text is plain readable math with ^ for powers. view must frame the important features (intercepts, extrema, asymptotes, given points) with some margin. If no formula is readable reply {\"reading\":\"<why>\",\"items\":[]}."
 ].join("\n");
   function setMsg(t, autoHideMs) {
@@ -610,14 +717,14 @@ function applyResult(d){
     if(!r||typeof r!=="object")return;
     var k=r.kind,o=null;
     if(k==="function"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr),dmin:null,dmax:null};
-    else if(k==="implicit"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr)};
+    else if(k==="implicit"&&r.expr)o={kind:k,text:r.text,expr:String(r.expr),disp:(typeof r.text==="string"&&r.text.indexOf("=")>=0)?r.text:undefined};
     else if(k==="vline"&&r.expr!=null)o={kind:k,text:r.text,expr:String(r.expr)};
     else if(k==="parametric"&&r.expr&&r.expr2)o={kind:k,text:r.text,expr:r.expr+", "+r.expr2,tmin:num(r.tmin),tmax:num(r.tmax)};
     else if(k==="point"&&num(r.x)!=null&&num(r.y)!=null)o={kind:k,text:r.text,expr:r.x+", "+r.y,open:!!r.open};
     if(o)out.push(mk(o));
   });
   if(!out.length){setStatus("그릴 식을 찾지 못했어요",true);return;}
-  items=out;colorN=out.length;
+  items=out;colorN=out.length;resetParams(d.params);
   var v=d.view;
   if(v&&[v.xmin,v.xmax,v.ymin,v.ymax].every(function(n){return typeof n==="number"&&isFinite(n);})&&v.xmax>v.xmin&&v.ymax>v.ymin){
     var mx=(v.xmax-v.xmin)*0.04,my=(v.ymax-v.ymin)*0.04;
@@ -754,7 +861,7 @@ document.addEventListener("visibilitychange",function(){
 });
 
 /* ---------- 시작 ---------- */
-render();
+resetParams();render();
 new ResizeObserver(resize).observe($("wrap"));
 if(window.matchMedia)window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
 new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
