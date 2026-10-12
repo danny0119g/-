@@ -106,6 +106,15 @@
     #albumBtn { order: 3; justify-self: center; align-self: center; }
   }
 
+  /* ---- 촬영 후 확인 바 ---- */
+  #rv { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; display: none; gap: 12px; align-items: center; justify-content: center;
+    padding: 20px 24px calc(20px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0)); }
+  #rv.on { display: flex; }
+  #rv img { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; border: 2px solid rgba(255,255,255,.85); background: #333; }
+  #rv button { min-height: 52px; padding: 0 22px; border-radius: 14px; font-weight: 800; font-size: 16px; }
+  #rvRetake { background: rgba(255,255,255,.22); color: #fff; }
+  #rvGo { background: var(--accent); color: var(--accent-ink); }
+
   /* ---- 그래프 화면 ---- */
   .gv { position: fixed; inset: 0; z-index: 10; background: var(--bg); color: var(--fg); overflow: auto;
     padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px)); }
@@ -171,6 +180,7 @@
     </button>
   </div>
   <input id="albumIn" type="file" accept="image/*" hidden>
+  <div id="rv"><img id="rvThumb" alt="찍은 사진"><button id="rvRetake">다시 찍기</button><button id="rvGo">그래프 그리기</button></div>
 </main>
 
 <section id="gv" class="gv" hidden aria-label="그래프">
@@ -476,7 +486,7 @@ $("addIn").addEventListener("keydown",function(e){if(e.key==="Enter")addManual()
 
 
 /* ---------- 무음 카메라 + 사진 읽기 ---------- */
-var API="https://api.anthropic.com/v1/messages",MODEL="claude-sonnet-5-5",KEY_NAME="anthropic_key";
+var API="https://generativelanguage.googleapis.com/v1beta/models/",MODELS=["gemini-flash-latest","gemini-2.5-flash"],KEY_NAME="gemini_key";
 var v=$("v"),c=$("c"),msg=$("msg"),startBtn=$("start"),shotBtn=$("shot"),flipBtn=$("flip"),row=$("row"),flash=$("flash");
 var stream=null,facing="environment",busy=false,wantOn=false,msgTimer=null;
 var ctl=null,timer=0,thumbUrl="";
@@ -622,7 +632,7 @@ function applyResult(d){
 
 function openGV(){$("gv").hidden=false;$("gv").scrollTop=0;}
 function handle(canvas){
-  if(!getKey()){setMsg("설정(톱니바퀴)에서 API 키를 먼저 넣어 주세요.\n지구과학 무음 카메라와 같은 키를 씁니다.");return;}
+  if(!getKey()){setMsg("설정(톱니바퀴)에서 Gemini API 키를 먼저 넣어 주세요.\naistudio.google.com에서 무료로 받을 수 있어요.");return;}
   var b64=toApiImage(canvas);
   canvas.toBlob(function(blob){
     if(!blob)return;
@@ -630,6 +640,17 @@ function handle(canvas){
     thumbUrl=URL.createObjectURL(blob);$("gthumb").src=thumbUrl;
   },"image/jpeg",0.8);
   openGV();readFormula(b64);
+}
+function callGemini(model,b64,signal){
+  return fetch(API+model+":generateContent",{
+    method:"POST",signal:signal,
+    headers:{"content-type":"application/json","x-goog-api-key":getKey()},
+    body:JSON.stringify({
+      systemInstruction:{parts:[{text:PROMPT}]},
+      contents:[{role:"user",parts:[{inlineData:{mimeType:"image/jpeg",data:b64}},{text:"사진 속 식을 JSON으로 알려 주세요."}]}],
+      generationConfig:{responseMimeType:"application/json",temperature:0,maxOutputTokens:8192}
+    })
+  });
 }
 async function readFormula(b64){
   if(ctl)ctl.abort();
@@ -639,21 +660,21 @@ async function readFormula(b64){
   timer=setInterval(function(){sec++;setStatus("식을 읽는 중… "+sec+"초",false);},1000);
   var kill=setTimeout(function(){cc.abort();},90000);
   try{
-    var res=await fetch(API,{
-      method:"POST",signal:cc.signal,
-      headers:{"content-type":"application/json","x-api-key":getKey(),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:MODEL,max_tokens:2500,system:PROMPT,messages:[{role:"user",content:[
-        {type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},
-        {type:"text",text:"사진 속 식을 JSON으로 알려 주세요."}]}]})
-    });
+    var res=null,i;
+    for(i=0;i<MODELS.length;i++){
+      res=await callGemini(MODELS[i],b64,cc.signal);
+      if(res.status!==404)break;
+    }
     if(ctl!==cc)return;
     if(!res.ok){
       stopTimer();
-      setStatus(res.status===401?"키가 올바르지 않습니다. 카메라 화면의 톱니바퀴에서 다시 입력하세요.":res.status===429?"요청이 많습니다. 잠시 뒤 다시 시도하세요.":"읽기에 실패했습니다. ("+res.status+")",true);
+      var st=res.status;
+      setStatus((st===400||st===401||st===403)?"키가 올바르지 않거나 사용할 수 없어요. 톱니바퀴에서 Gemini 키를 다시 넣어 주세요. ("+st+")":st===429?"무료 사용 한도에 걸렸어요. 잠시 뒤 다시 시도하세요.":"읽기에 실패했습니다. ("+st+")",true);
       return;
     }
     var data=await res.json();
-    var text=(data.content||[]).map(function(b){return b.type==="text"?b.text:"";}).join("\n");
+    var cand=(data.candidates||[])[0],parts=(cand&&cand.content&&cand.content.parts)||[];
+    var text=parts.map(function(p){return p.text||"";}).join("\n");
     var a=text.indexOf("{"),z=text.lastIndexOf("}"),obj=null;
     try{obj=JSON.parse(text.slice(a,z+1));}catch(e){}
     if(ctl!==cc)return;
@@ -667,18 +688,28 @@ async function readFormula(b64){
     setStatus(ab?"중단했습니다.":"읽기에 실패했습니다. 네트워크를 확인해 주세요.",!ab);
   }finally{clearTimeout(kill);}
 }
+var rvUrl="";
+function review(){
+  v.pause();row.classList.remove("on");setMsg("");
+  c.toBlob(function(b){if(!b)return;if(rvUrl)URL.revokeObjectURL(rvUrl);rvUrl=URL.createObjectURL(b);$("rvThumb").src=rvUrl;},"image/jpeg",0.6);
+  $("rv").classList.add("on");
+}
+function resumeCam(){
+  $("rv").classList.remove("on");
+  if(stream){row.classList.add("on");var p=v.play();if(p&&p.catch)p.catch(function(){});}else startCamera();
+}
 function capture(){
   if(busy||!stream||!v.videoWidth)return;
   c.width=v.videoWidth;c.height=v.videoHeight;
   c.getContext("2d").drawImage(v,0,0,c.width,c.height);
   shutterEffect();
-  handle(c);
+  review();
 }
 startBtn.onclick=startCamera;
 shotBtn.onclick=capture;
 flipBtn.onclick=function(){facing=facing==="environment"?"user":"environment";startCamera();};
 $("gear").onclick=function(){
-  var k=prompt("Anthropic API 키를 입력하세요.\n이 기기의 브라우저에만 저장됩니다. 비우고 확인하면 삭제됩니다.","");
+  var k=prompt("Gemini API 키를 입력하세요. (aistudio.google.com에서 무료 발급)\n이 기기의 브라우저에만 저장됩니다. 비우고 확인하면 삭제됩니다.","");
   if(k===null)return;
   k=k.trim();var ok=setKey(k);
   setMsg(!ok?"키를 저장하지 못했습니다.":k?"키를 저장했습니다.":"키를 삭제했습니다.",2000);
@@ -689,13 +720,15 @@ $("albumIn").onchange=async function(e){
   try{
     var bmp=await createImageBitmap(f);
     c.width=bmp.width;c.height=bmp.height;c.getContext("2d").drawImage(bmp,0,0);
-    handle(c);
+    review();
   }catch(err){setMsg("사진을 열지 못했습니다. 다른 사진을 골라 주세요.",3000);}
 };
 $("back").onclick=function(){
   if(ctl){ctl.abort();ctl=null;}
-  stopTimer();$("gv").hidden=true;
+  stopTimer();$("gv").hidden=true;resumeCam();
 };
+$("rvRetake").onclick=resumeCam;
+$("rvGo").onclick=function(){handle(c);};
 $("stopBtn").onclick=function(){if(ctl)ctl.abort();};
 $("save").onclick=function(){
   cv.toBlob(function(b){
